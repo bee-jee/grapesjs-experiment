@@ -69,7 +69,6 @@ export const createTypeFromTextNodes = (components, mapping) => {
 
 export const createAttributesFromComponent = (component) => {
     const obj = component.toJSON();
-    obj.style = component.getStyle();
     delete obj.components;
     if (obj.classes) {
         obj.classes = obj.classes.map((cls) => isString(cls) ? cls : cls.get('name'));
@@ -418,8 +417,6 @@ const updateYFragment = (y, yDomFragment, component, mapping) => {
             for (let i = left; i < gChildCnt - right; i++) {
                 ins.push(createTypeFromTextOrElementNode(gChildren[i], mapping));
             }
-            console.log(left);
-            console.log(ins);
             yDomFragment.insert(left, ins);
         }
     });
@@ -551,11 +548,41 @@ export const updateYMap = (yMap, obj) => {
     });
 }
 
+export const ruleToObj = (rule) => {
+    const obj = rule.toJSON();
+    if (obj.selectors) {
+        obj.selectors = obj.selectors.toJSON();
+    }
+    return obj;
+}
+
+export const keyFromRule = (rule) => {
+    const prefix = [
+        rule.get('atRuleType'),
+        rule.get('mediaText'),
+    ].filter((part) => part).join('-');
+    return `${prefix}${rule.selectorsToString()}`;
+}
+
 export const updateCssRules = (doc, yCssRules, gCssRules) => {
-    gCssRules = JSON.parse(JSON.stringify(gCssRules));
-    console.log(gCssRules);
-    updateYArray(yCssRules, gCssRules);
-    console.log(yCssRules.toJSON());
+    const keySet = new Set();
+    gCssRules.each((rule) => {
+        const key = keyFromRule(rule);
+        keySet.add(key);
+        if (!yCssRules.has(key)) {
+            yCssRules.set(key, new Y.Map());
+        }
+        const yValue = yCssRules.get(key);
+        const value = ruleToObj(rule);
+        if (!equalYMapObject(yValue, value)) {
+            updateYMap(yCssRules.get(key), ruleToObj(rule));
+        }
+    });
+    for (const key of yCssRules.keys()) {
+        if (!keySet.has(key)) {
+            yCssRules.delete(key);
+        }
+    }
 }
 
 export class GrapesjsBinding {
@@ -569,7 +596,7 @@ export class GrapesjsBinding {
         this.wrapper = editor.getModel().getWrapper();
 
         const domComponents = doc.get('domComponents', Y.XmlFragment);
-        const cssRules = doc.get('cssRules', Y.Array);
+        const cssRules = doc.get('cssRules', Y.Map);
         this.domComponents = domComponents;
         this.cssRules = cssRules;
         this.editor = editor;
@@ -605,13 +632,13 @@ export class GrapesjsBinding {
         this.muxCssRules(() => {
             const cssComposer = this.editor.CssComposer;
             const sm = this.editor.SelectorManager;
-            console.log(this.cssRules.toJSON());
-            (this.cssRules.toJSON() || []).forEach((rule) => {
+            const rules = this.cssRules.toJSON() || {};
+            Object.keys(rules).forEach((key) => {
+                const rule = rules[key];
                 const selectors = rule.selectors.map((selector) => {
                     return sm.add(selector);
                 });
-                const r = cssComposer.add(selectors, rule.state, rule.mediaText, rule);
-                console.log(r.toJSON());
+                const r = cssComposer.add(selectors, rule.state || '', rule.mediaText, rule);
             });
         });
     }
