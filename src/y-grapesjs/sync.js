@@ -187,16 +187,16 @@ const matchNodeName = (yElement, component) => !(component instanceof Array)
 
 /**
  * @param {Y.XmlElement|Y.XmlText|Y.XmlHook} ytype
- * @param {any|Array<any>} pnode
+ * @param {any|Array<any>} gnode
  */
-const equalYTypeGNode = (ytype, pnode) => {
-    if (ytype instanceof Y.XmlElement && !(pnode instanceof Array) && matchNodeName(ytype, pnode)) {
-        const normalizedContent = normalizeComponentContent(pnode);
+const equalYTypeGNode = (ytype, gnode) => {
+    if (ytype instanceof Y.XmlElement && !(gnode instanceof Array) && matchNodeName(ytype, gnode)) {
+        const normalizedContent = normalizeComponentContent(gnode);
         return ytype._length === normalizedContent.length
-            && equalAttrs(ytype, pnode)
+            && equalAttrs(ytype, gnode)
             && ytype.toArray().every((ychild, i) => equalYTypeGNode(ychild, normalizedContent[i]));
     }
-    return ytype instanceof Y.XmlText && pnode instanceof Array && equalYTextGText(ytype, pnode);
+    return ytype instanceof Y.XmlText && gnode instanceof Array && equalYTextGText(ytype, gnode);
 }
 
 /**
