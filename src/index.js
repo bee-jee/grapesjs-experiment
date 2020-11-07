@@ -24,9 +24,7 @@ const editor = grapesjs.init({
     storageManager: null,
 });
 
-const type = doc.get('grapejs', Y.XmlFragment);
-
-const binding = new GrapesjsBinding(type, editor.getModel().getWrapper());
+const binding = new GrapesjsBinding(doc, editor);
 
 doc.on('update', () => {
     console.log(doc);
@@ -38,16 +36,16 @@ doc.on('update', () => {
 //     });
 // }
 
-editor.on('update', () => {
-    binding._grapesjsChanged(editor.getModel().getWrapper());
-    // console.log(editor.getModel().getComponents());
-    console.log(editor.getModel().get('CssComposer').getAll());
-    // editor.getModel().get('storables').forEach(m => {
-    //     console.log(m.store);
-    //     const obj = m.store(1);
-    //     console.log(obj);
-    // });
-});
+// editor.on('update', () => {
+//     const cssRules = editor.getModel().get('CssComposer').getAll();
+//     binding._grapesjsChanged(editor.getModel().getWrapper(), cssRules);
+//     console.log(editor.getModel().getComponents());
+//     editor.getModel().get('storables').forEach(m => {
+//         console.log(m.store);
+//         const obj = m.store(1);
+//         console.log(obj);
+//     });
+// });
 
 editor.on('component:update', (model, style = {}, opts = {}) => {
     // console.log(getComponentClasses(model));

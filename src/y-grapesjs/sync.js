@@ -3,22 +3,22 @@ import { createMutex } from 'lib0/mutex';
 import * as error from 'lib0/error';
 import { simpleDiff } from 'lib0/diff';
 import * as Y from 'yjs';
-import { isEqual, isString } from 'underscore';
+import { isArray, isEqual, isObject, isString } from 'underscore';
 
 /**
  * Either a node if type is YXmlElement or an Array of text nodes if YXmlText
- * @typedef {Map<Y.AbstractType, PModel.Node | Array<PModel.Node>>} ProsemirrorMapping
+ * @typedef {Map<Y.AbstractType, any>} GrapesjsMapping
  */
 
 /**
-* @typedef {Array<Array<PModel.Node>|PModel.Node>} NormalizedPNodeContent
+* @typedef {Array<any>} NormalizedComponentContent
 */
 
 /**
  * @param {any} component
- * @return {NormalizedPNodeContent}
+ * @return {NormalizedComponentContent}
  */
-export const normalizePNodeContent = (component) => {
+export const normalizeComponentContent = (component) => {
     const children = component.get('components');
     const res = [];
     for (let i = 0; i < children.length; i++) {
@@ -43,8 +43,8 @@ export const normalizePNodeContent = (component) => {
 
 /**
  * @private
- * @param {any|Array<any>} component prosemirror text node
- * @param {ProsemirrorMapping} mapping
+ * @param {any|Array<any>} component grapesjs text node
+ * @param {GrapesjsMapping} mapping
  * @return {Y.XmlElement|Y.XmlText}
  */
 export const createTypeFromTextOrElementNode = (component, mapping) =>
@@ -53,8 +53,8 @@ export const createTypeFromTextOrElementNode = (component, mapping) =>
 
 /**
  * @private
- * @param {Array<any>} components prosemirror node
- * @param {ProsemirrorMapping} mapping
+ * @param {Array<any>} components grapesjs node
+ * @param {GrapesjsMapping} mapping
  * @return {Y.XmlText}
  */
 export const createTypeFromTextNodes = (components, mapping) => {
@@ -71,14 +71,16 @@ export const createAttributesFromComponent = (component) => {
     const obj = component.toJSON();
     obj.style = component.getStyle();
     delete obj.components;
-    obj.classes = obj.classes.map((cls) => isString(cls) ? cls : cls.get('name'));
+    if (obj.classes) {
+        obj.classes = obj.classes.map((cls) => isString(cls) ? cls : cls.get('name'));
+    }
     return obj;
 }
 
 /**
  * @private
- * @param {any} component prosemirror node
- * @param {ProsemirrorMapping} mapping
+ * @param {any} component grapesjs node
+ * @param {GrapesjsMapping} mapping
  * @return {Y.XmlElement}
  */
 export const createTypeFromElementNode = (component, mapping) => {
@@ -94,7 +96,7 @@ export const createTypeFromElementNode = (component, mapping) => {
     }
     type.setAttribute('content', content);
 
-    type.insert(0, normalizePNodeContent(component).map(n => createTypeFromTextOrElementNode(n, mapping)));
+    type.insert(0, normalizeComponentContent(component).map(n => createTypeFromTextOrElementNode(n, mapping)));
     mapping.set(type, component);
     return type;
 }
@@ -103,9 +105,9 @@ export const createTypeFromElementNode = (component, mapping) => {
  * @private
  * @param {Y.XmlElement | Y.XmlHook} el
  * @param {any} parent
- * @param {ProsemirrorMapping} mapping
+ * @param {GrapesjsMapping} mapping
  * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
- * @return {PModel.Node | null}
+ * @return {any | null}
  */
 export const createNodeIfNotExists = (el, parent, mapping, computeYChange) => {
     const component = mapping.get(el);
@@ -123,9 +125,9 @@ export const createNodeIfNotExists = (el, parent, mapping, computeYChange) => {
  * @private
  * @param {Y.XmlElement} el
  * @param {any} parent
- * @param {ProsemirrorMapping} mapping
+ * @param {GrapesjsMapping} mapping
  * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
- * @return {PModel.Node | null} Returns node if node could be created. Otherwise it deletes the yjs type and returns null
+ * @return {any | null} Returns node if node could be created. Otherwise it deletes the yjs type and returns null
  */
 export const createNodeFromYElement = (el, parent, mapping, computeYChange) => {
     try {
@@ -153,9 +155,9 @@ export const createNodeFromYElement = (el, parent, mapping, computeYChange) => {
  * @private
  * @param {Y.XmlText} text
  * @param {any} parent
- * @param {ProsemirrorMapping} mapping
+ * @param {GrapesjsMapping} mapping
  * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
- * @return {Array<PModel.Node>|null}
+ * @return {Array<any>|null}
  */
 export const createTextNodesFromYText = (text, parent, mapping, computeYChange) => {
     const deltas = text.toDelta(undefined, undefined, computeYChange);
@@ -178,34 +180,34 @@ export const createTextNodesFromYText = (text, parent, mapping, computeYChange) 
 /**
  * @function
  * @param {Y.XmlElement} yElement
- * @param {any} pNode Prosemirror Node
+ * @param {any} component Grapesjs Node
  */
-const matchNodeName = (yElement, pNode) => !(pNode instanceof Array)
-    && yElement.nodeName === pNode.get('tagName')
-    && yElement.getAttribute('type') === pNode.get('type');
+const matchNodeName = (yElement, component) => !(component instanceof Array)
+    && yElement.nodeName === component.get('tagName')
+    && yElement.getAttribute('type') === component.get('type');
 
 /**
  * @param {Y.XmlElement|Y.XmlText|Y.XmlHook} ytype
  * @param {any|Array<any>} pnode
  */
-const equalYTypePNode = (ytype, pnode) => {
+const equalYTypeGNode = (ytype, pnode) => {
     if (ytype instanceof Y.XmlElement && !(pnode instanceof Array) && matchNodeName(ytype, pnode)) {
-        const normalizedContent = normalizePNodeContent(pnode);
+        const normalizedContent = normalizeComponentContent(pnode);
         return ytype._length === normalizedContent.length
             && equalAttrs(ytype, pnode)
-            && ytype.toArray().every((ychild, i) => equalYTypePNode(ychild, normalizedContent[i]));
+            && ytype.toArray().every((ychild, i) => equalYTypeGNode(ychild, normalizedContent[i]));
     }
-    return ytype instanceof Y.XmlText && pnode instanceof Array && equalYTextPText(ytype, pnode);
+    return ytype instanceof Y.XmlText && pnode instanceof Array && equalYTextGText(ytype, pnode);
 }
 
 /**
  * @param {Y.XmlText} ytext
- * @param {Array<any>} ptexts
+ * @param {Array<any>} gtexts
  */
-const equalYTextPText = (ytext, ptexts) => {
+const equalYTextGText = (ytext, gtexts) => {
     const delta = ytext.toDelta();
-    return delta.length === ptexts.length
-        && delta.every((d, i) => d.insert === ptexts[i].get('content'));
+    return delta.length === gtexts.length
+        && delta.every((d, i) => d.insert === gtexts[i].get('content'));
 }
 
 const ytextTrans = ytext => {
@@ -231,13 +233,13 @@ const ytextTrans = ytext => {
  * @todo test this more
  *
  * @param {Y.Text} ytext
- * @param {Array<any>} ptexts
- * @param {ProsemirrorMapping} mapping
+ * @param {Array<any>} gtexts
+ * @param {GrapesjsMapping} mapping
  */
-const updateYText = (ytext, ptexts, mapping) => {
-    mapping.set(ytext, ptexts);
+const updateYText = (ytext, gtexts, mapping) => {
+    mapping.set(ytext, gtexts);
     const { str } = ytextTrans(ytext);
-    const content = ptexts.map(p => ({
+    const content = gtexts.map(p => ({
         insert: p.get('content'),
         attributes: {},
     }));
@@ -248,31 +250,31 @@ const updateYText = (ytext, ptexts, mapping) => {
 }
 
 /**
- * @param {PModel.Node | Array<PModel.Node> | undefined} mapped
- * @param {PModel.Node | Array<PModel.Node>} pcontent
+ * @param {any | Array<any> | undefined} mapped
+ * @param {any | Array<any>} component
  */
-const mappedIdentity = (mapped, pcontent) => mapped === pcontent
+const mappedIdentity = (mapped, component) => mapped === component
     || (
         mapped instanceof Array
-        && pcontent instanceof Array
-        && mapped.length === pcontent.length
-        && mapped.every((a, i) => pcontent[i] === a)
+        && component instanceof Array
+        && mapped.length === component.length
+        && mapped.every((a, i) => component[i] === a)
     );
 
-const equalAttrs = (ytype, pnode) => {
+const equalAttrs = (ytype, component) => {
     const attrs = ytype.getAttributes();
-    return isEqual(createAttributesFromComponent(pnode), attrs);
+    return isEqual(createAttributesFromComponent(component), attrs);
 }
 
 /**
  * @param {Y.XmlElement} ytype
- * @param {PModel.Node} pnode
- * @param {ProsemirrorMapping} mapping
+ * @param {any} component
+ * @param {GrapesjsMapping} mapping
  * @return {{ foundMappedChild: boolean, equalityFactor: number }}
  */
-const computeChildEqualityFactor = (ytype, pnode, mapping) => {
+const computeChildEqualityFactor = (ytype, component, mapping) => {
     const yChildren = ytype.toArray();
-    const pChildren = normalizePNodeContent(pnode);
+    const pChildren = normalizeComponentContent(component);
     const pChildCnt = pChildren.length;
     const yChildCnt = yChildren.length;
     const minCnt = math.min(yChildCnt, pChildCnt);
@@ -284,7 +286,7 @@ const computeChildEqualityFactor = (ytype, pnode, mapping) => {
         const leftP = pChildren[left];
         if (mappedIdentity(mapping.get(leftY), leftP)) {
             foundMappedChild = true; // definite (good) match!
-        } else if (!equalYTypePNode(leftY, leftP)) {
+        } else if (!equalYTypeGNode(leftY, leftP)) {
             break;
         }
     }
@@ -293,7 +295,7 @@ const computeChildEqualityFactor = (ytype, pnode, mapping) => {
         const rightP = pChildren[pChildCnt - right - 1];
         if (mappedIdentity(mapping.get(rightY), rightP)) {
             foundMappedChild = true;
-        } else if (!equalYTypePNode(rightY, rightP)) {
+        } else if (!equalYTypeGNode(rightY, rightP)) {
             break;
         }
     }
@@ -308,7 +310,7 @@ const computeChildEqualityFactor = (ytype, pnode, mapping) => {
  * @param {Y.Doc} y
  * @param {Y.XmlFragment} yDomFragment
  * @param {any} component
- * @param {ProsemirrorMapping} mapping
+ * @param {GrapesjsMapping} mapping
  */
 const updateYFragment = (y, yDomFragment, component, mapping) => {
     if (yDomFragment instanceof Y.XmlElement && yDomFragment.nodeName !== component.get('tagName')) {
@@ -336,18 +338,18 @@ const updateYFragment = (y, yDomFragment, component, mapping) => {
         }
     }
     // update children
-    const pChildren = normalizePNodeContent(component);
-    const pChildCnt = pChildren.length;
+    const gChildren = normalizeComponentContent(component);
+    const gChildCnt = gChildren.length;
     const yChildren = yDomFragment.toArray();
     const yChildCnt = yChildren.length;
-    const minCnt = math.min(pChildCnt, yChildCnt);
+    const minCnt = math.min(gChildCnt, yChildCnt);
     let left = 0;
     let right = 0;
     // find number of matching elements from left
     for (; left < minCnt; left++) {
         const leftY = yChildren[left];
-        const leftP = pChildren[left];
-        if (equalYTypePNode(leftY, leftP)) {
+        const leftP = gChildren[left];
+        if (equalYTypeGNode(leftY, leftP)) {
             // update mapping
             mapping.set(leftY, leftP);
         } else {
@@ -357,8 +359,8 @@ const updateYFragment = (y, yDomFragment, component, mapping) => {
     // find number of matching elements from right
     for (; right + left + 1 < minCnt; right++) {
         const rightY = yChildren[yChildCnt - right - 1];
-        const rightP = pChildren[pChildCnt - right - 1];
-        if (equalYTypePNode(rightY, rightP)) {
+        const rightP = gChildren[gChildCnt - right - 1];
+        if (equalYTypeGNode(rightY, rightP)) {
             // update mapping
             mapping.set(rightY, rightP);
         } else {
@@ -367,13 +369,13 @@ const updateYFragment = (y, yDomFragment, component, mapping) => {
     }
     y.transact(() => {
         // try to compare and update
-        while (yChildCnt - left - right > 0 && pChildCnt - left - right > 0) {
+        while (yChildCnt - left - right > 0 && gChildCnt - left - right > 0) {
             const leftY = yChildren[left];
-            const leftP = pChildren[left];
+            const leftP = gChildren[left];
             const rightY = yChildren[yChildCnt - right - 1];
-            const rightP = pChildren[pChildCnt - right - 1];
+            const rightP = gChildren[gChildCnt - right - 1];
             if (leftY instanceof Y.XmlText && leftP instanceof Array) {
-                if (!equalYTextPText(leftY, leftP)) {
+                if (!equalYTextGText(leftY, leftP)) {
                     updateYText(leftY, leftP, mapping);
                 }
                 left += 1;
@@ -411,65 +413,224 @@ const updateYFragment = (y, yDomFragment, component, mapping) => {
         if (yDelLen > 0) {
             yDomFragment.delete(left, yDelLen);
         }
-        if (left + right < pChildCnt) {
+        if (left + right < gChildCnt) {
             const ins = [];
-            for (let i = left; i < pChildCnt - right; i++) {
-                ins.push(createTypeFromTextOrElementNode(pChildren[i], mapping));
+            for (let i = left; i < gChildCnt - right; i++) {
+                ins.push(createTypeFromTextOrElementNode(gChildren[i], mapping));
             }
+            console.log(left);
+            console.log(ins);
             yDomFragment.insert(left, ins);
         }
     });
 }
 
-export class GrapesjsBinding {
-    /**
-     * @param {Y.XmlFragment} yXmlFragment The bind source
-     */
-    constructor(yXmlFragment, wrapper) {
-        this.type = yXmlFragment;
-        this.mux = createMutex();
-        this.mapping = new Map();
-        this._observeFunction = this._typeChanged.bind(this);
-        this.wrapper = wrapper;
+export const equalYArrayArray = (yArray, arr) => {
+    return arr.length === yArray.length
+        && arr.every((value, i) => value === yArray.get(i));
+}
 
-        yXmlFragment.observeDeep(this._observeFunction);
+export const equalYMapObject = (yMap, obj) => {
+    if (!(yMap instanceof Y.Map)) {
+        return false;
+    }
+    if (!isObject(obj)) {
+        return false;
+    }
+    const yKeys = yMap.keys();
+    const objKeys = Object.keys(obj);
+    if (!isEqual(yKeys, objKeys)) {
+        return false;
+    }
+    for (let i = 0; i < yKeys.length; i++) {
+        const key = yKeys[i];
+        const yValue = yMap.get(key);
+        const value = obj[key];
+
+        if (yValue instanceof Y.Array && isArray(value)) {
+            return equalYArrayArray(yValue, value);
+        }
+        if (yValue instanceof Y.Map && isObject(value)) {
+            return equalYMapObject(yValue, value);
+        }
+        return yValue === value;
+    }
+    return true;
+}
+
+export const createYMapFromObj = (obj) => {
+    const yMap = new Y.Map();
+    Object.keys(obj).forEach((key) => {
+        yMap.set(key, createYValueFromJS(obj[key]));
+    });
+    return yMap;
+}
+
+export const createYArrayFromArray = (arr) => {
+    const yArray = new Y.Array();
+    arr.forEach((value) => {
+        yArray.push([createYValueFromJS(value)]);
+    });
+    return yArray;
+}
+
+export const createYValueFromJS = (value) => {
+    if (isArray(value)) {
+        return createYArrayFromArray(value);
+    }
+    if (isObject(value)) {
+        return createYMapFromObj(value);
+    }
+    return value;
+}
+
+export const updateYArray = (yArray, arr) => {
+    if (equalYArrayArray(yArray, arr)) {
+        return;
+    }
+    const min = math.min(yArray.length, arr.length);
+    let i = 0;
+    for (; i < min; i++) {
+        const yValue = yArray.get(i);
+        const value = arr[i];
+
+        if (yValue instanceof Y.Array && isArray(value)) {
+            updateYArray(yValue, value);
+            continue;
+        }
+
+        if (yValue instanceof Y.Map && isObject(value)) {
+            updateYMap(yValue, value);
+            continue;
+        }
+
+        if (yValue !== value) {
+            yArray.insert(i, createYValueFromJS(value));
+        }
+    }
+    if (i < yArray.lengt) {
+        yArray.delete(i, yArray.length - i);
+    } else if (i < arr.length) {
+        for (; i < arr.length; i++) {
+            yArray.push([createYValueFromJS(arr[i])]);
+        }
+    }
+}
+
+export const updateYMap = (yMap, obj) => {
+    Object.keys(obj).forEach((key) => {
+        const value = obj[key];
+        if (yMap.has(key)) {
+            const yValue = yMap.get(key);
+
+            if (yValue instanceof Y.Array && isArray(value)) {
+                updateYArray(yValue, value);
+                return;
+            }
+
+            if (yValue instanceof Y.Map && isObject(value)) {
+                updateYMap(yValue, value);
+                return;
+            }
+
+            if (yValue !== value) {
+                return;
+            }
+        }
+        yMap.set(key, createYValueFromJS(value));
+    });
+    const deleted = [];
+    const keys = yMap.keys();
+    for (const key  of keys) {
+        if (!(key in obj)) {
+            deleted.push(key);
+        }
+    }
+    deleted.forEach((key) => {
+        yMap.delete(key);
+    });
+}
+
+export const updateCssRules = (doc, yCssRules, gCssRules) => {
+    gCssRules = JSON.parse(JSON.stringify(gCssRules));
+    console.log(gCssRules);
+    updateYArray(yCssRules, gCssRules);
+    console.log(yCssRules.toJSON());
+}
+
+export class GrapesjsBinding {
+    constructor(doc, editor) {
+        this.muxDocComponents = createMutex();
+        this.muxCssRules = createMutex();
+        this.docComponentsMapping = new Map();
+        this._observeDomComponentsFunction = this._docComponentsChanged.bind(this);
+        this._observeCssRulesFunction = this._cssRulesChanged.bind(this);
+
+        this.wrapper = editor.getModel().getWrapper();
+
+        const domComponents = doc.get('domComponents', Y.XmlFragment);
+        const cssRules = doc.get('cssRules', Y.Array);
+        this.domComponents = domComponents;
+        this.cssRules = cssRules;
+        this.editor = editor;
+
+        domComponents.observeDeep(this._observeDomComponentsFunction);
+        cssRules.observeDeep(this._observeCssRulesFunction);
+        editor.on('update', this._grapesjsChanged.bind(this));
 
         /**
          * @type {Y.Doc}
          */
-        this.doc = yXmlFragment.doc;
+        this.doc = doc;
     }
 
-    /**
-     * @param {Array<Y.YEvent>} events
-     * @param {Y.Transaction} transaction
-     */
-    _typeChanged(events, transaction) {
-        this.mux(() => {
+    _docComponentsChanged(events, transaction) {
+        this.muxDocComponents(() => {
             /**
              * @param {any} _
              * @param {Y.AbstractType} type
              */
-            const delType = (_, type) => this.mapping.delete(type);
+            const delType = (_, type) => this.docComponentsMapping.delete(type);
             Y.iterateDeletedStructs(transaction,
                 transaction.deleteSet,
-                struct => struct.constructor === Y.Item && this.mapping.delete(struct.content.type));
+                struct => struct.constructor === Y.Item && this.docComponentsMapping.delete(struct.content.type));
             transaction.changed.forEach(delType);
             transaction.changedParentTypes.forEach(delType);
-            this.type.toArray()
-                .forEach(t => createNodeIfNotExists(t, this.wrapper, this.mapping));
+            this.domComponents.toArray()
+                .forEach(t => createNodeIfNotExists(t, this.wrapper, this.docComponentsMapping));
         });
     }
 
-    _grapesjsChanged(wrapper) {
-        // this.mux(() => {
-        //     this.doc.transact(() => {
-        //         updateYFragment(this.doc, this.type, wrapper, this.mapping);
-        //     });
-        // });
+    _cssRulesChanged(events, transaction) {
+        this.muxCssRules(() => {
+            const cssComposer = this.editor.CssComposer;
+            const sm = this.editor.SelectorManager;
+            console.log(this.cssRules.toJSON());
+            (this.cssRules.toJSON() || []).forEach((rule) => {
+                const selectors = rule.selectors.map((selector) => {
+                    return sm.add(selector);
+                });
+                const r = cssComposer.add(selectors, rule.state, rule.mediaText, rule);
+                console.log(r.toJSON());
+            });
+        });
+    }
+
+    _grapesjsChanged() {
+        this.muxDocComponents(() => {
+            this.doc.transact(() => {
+                updateYFragment(this.doc, this.domComponents, this.wrapper, this.docComponentsMapping);
+            });
+        });
+        this.muxCssRules(() => {
+            this.doc.transact(() => {
+                const cssRules = this.editor.getModel().get('CssComposer').getAll();
+                updateCssRules(this.doc, this.cssRules, cssRules);
+            });
+        });
     }
 
     destroy() {
-        this.type.unobserveDeep(this._observeFunction);
+        this.domComponents.unobserveDeep(this._observeDomComponentsFunction);
     }
 }
