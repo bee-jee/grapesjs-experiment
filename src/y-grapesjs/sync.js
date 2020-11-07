@@ -69,6 +69,7 @@ export const createTypeFromTextNodes = (components, mapping) => {
 
 export const createAttributesFromComponent = (component) => {
     const obj = component.toJSON();
+    obj.type = component.get('type');
     delete obj.components;
     if (obj.classes) {
         obj.classes = obj.classes.map((cls) => isString(cls) ? cls : cls.get('name'));
