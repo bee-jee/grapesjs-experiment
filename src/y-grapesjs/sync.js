@@ -423,36 +423,11 @@ const updateYFragment = (y, yDomFragment, component, mapping) => {
 }
 
 export const equalYArrayArray = (yArray, arr) => {
-    return arr.length === yArray.length
-        && arr.every((value, i) => value === yArray.get(i));
+    return isEqual(yArray.toJSON(), arr);
 }
 
 export const equalYMapObject = (yMap, obj) => {
-    if (!(yMap instanceof Y.Map)) {
-        return false;
-    }
-    if (!isObject(obj)) {
-        return false;
-    }
-    const yKeys = yMap.keys();
-    const objKeys = Object.keys(obj);
-    if (!isEqual(yKeys, objKeys)) {
-        return false;
-    }
-    for (let i = 0; i < yKeys.length; i++) {
-        const key = yKeys[i];
-        const yValue = yMap.get(key);
-        const value = obj[key];
-
-        if (yValue instanceof Y.Array && isArray(value)) {
-            return equalYArrayArray(yValue, value);
-        }
-        if (yValue instanceof Y.Map && isObject(value)) {
-            return equalYMapObject(yValue, value);
-        }
-        return yValue === value;
-    }
-    return true;
+    return isEqual(yMap.toJSON(), obj);
 }
 
 export const createYMapFromObj = (obj) => {
@@ -530,7 +505,7 @@ export const updateYMap = (yMap, obj) => {
                 return;
             }
 
-            if (yValue !== value) {
+            if (yValue === value) {
                 return;
             }
         }
@@ -575,7 +550,7 @@ export const updateCssRules = (doc, yCssRules, gCssRules) => {
         const yValue = yCssRules.get(key);
         const value = ruleToObj(rule);
         if (!equalYMapObject(yValue, value)) {
-            updateYMap(yCssRules.get(key), ruleToObj(rule));
+            updateYMap(yCssRules.get(key), value);
         }
     });
     for (const key of yCssRules.keys()) {
