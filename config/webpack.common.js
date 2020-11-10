@@ -1,8 +1,10 @@
 const paths = require('./paths')
+const { target } = require('./esbuild')
 
 const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 const CopyWebpackPlugin = require('copy-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
+const { ESBuildPlugin } = require('esbuild-loader')
 
 module.exports = {
     // Where webpack looks to start building the bundle
@@ -41,13 +43,16 @@ module.exports = {
             template: paths.src + '/template.html', // template file
             filename: 'index.html', // output file
         }),
+
+        new ESBuildPlugin(),
     ],
 
     // Determine how modules within the project are treated
     module: {
         rules: [
-            // JavaScript: Use Babel to transpile JavaScript files
-            { test: /\.js$/, exclude: /node_modules/, use: ['babel-loader'] },
+            { test: /\.js$/, loader: 'esbuild-loader', options: { target: target } },
+            // // JavaScript: Use Babel to transpile JavaScript files
+            // { test: /\.js$/, exclude: /node_modules/, use: ['babel-loader'] },
 
             // Styles: Inject CSS into the head with source maps
             {

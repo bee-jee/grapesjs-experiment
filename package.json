@@ -19,6 +19,7 @@
     "cross-env": "^7.0.2",
     "css-loader": "^5.0.1",
     "css-minimizer-webpack-plugin": "^1.1.5",
+    "esbuild-loader": "^2.4.0",
     "grapesjs": "^0.16.27",
     "grapesjs-preset-webpage": "^0.1.11",
     "html-webpack-plugin": "^4.5.0",
