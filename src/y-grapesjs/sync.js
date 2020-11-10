@@ -71,6 +71,7 @@ export const createAttributesFromComponent = (component) => {
     const obj = component.toJSON();
     obj.type = component.get('type');
     delete obj.components;
+    delete obj.status;
     if (obj.classes) {
         obj.classes = obj.classes.map((cls) => isString(cls) ? cls : cls.get('name'));
     }
@@ -263,6 +264,9 @@ const mappedIdentity = (mapped, component) => mapped === component
 
 const equalAttrs = (ytype, component) => {
     const attrs = ytype.getAttributes();
+    console.log(createAttributesFromComponent(component));
+    console.log(attrs);
+    console.log(isEqual(createAttributesFromComponent(component), attrs));
     return isEqual(createAttributesFromComponent(component), attrs);
 }
 

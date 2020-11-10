@@ -5,8 +5,15 @@ import './css/styles.css';
 import * as Y from 'yjs';
 import { GrapesjsBinding } from './y-grapesjs/sync';
 import { IndexeddbPersistence } from 'y-indexeddb';
+import { WebsocketProvider } from 'y-websocket';
 
 const doc = new Y.Doc();
+
+const wsProvider = new WebsocketProvider('ws://localhost:1234', 'web-builder', doc);
+
+wsProvider.on('status', (event) => {
+    console.log(event); // logs "connected" or "disconnected"
+});
 
 const persistence = new IndexeddbPersistence('test', doc);
 
