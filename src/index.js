@@ -3,9 +3,10 @@ import 'grapesjs-preset-webpage';
 import './css/grapes.min.css';
 import './css/styles.css';
 import * as Y from 'yjs';
-import { GrapesjsBinding } from './y-grapesjs/sync';
+import { GrapesjsSync } from './y-grapesjs/sync';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { WebsocketProvider } from 'y-websocket';
+import { GrapesjsCursor } from './y-grapesjs/cursor';
 
 const doc = new Y.Doc();
 
@@ -31,7 +32,9 @@ const editor = grapesjs.init({
     storageManager: null,
 });
 
-const binding = new GrapesjsBinding(doc, editor);
+const sync = new GrapesjsSync(doc, editor);
+
+const cursor = new GrapesjsCursor(wsProvider.awareness, doc, editor);
 
 doc.on('update', () => {
     console.log(doc);

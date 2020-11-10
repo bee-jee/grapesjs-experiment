@@ -264,9 +264,6 @@ const mappedIdentity = (mapped, component) => mapped === component
 
 const equalAttrs = (ytype, component) => {
     const attrs = ytype.getAttributes();
-    console.log(createAttributesFromComponent(component));
-    console.log(attrs);
-    console.log(isEqual(createAttributesFromComponent(component), attrs));
     return isEqual(createAttributesFromComponent(component), attrs);
 }
 
@@ -565,7 +562,7 @@ export const updateCssRules = (doc, yCssRules, gCssRules) => {
     }
 }
 
-export class GrapesjsBinding {
+export class GrapesjsSync {
     constructor(doc, editor) {
         this.muxDocComponents = createMutex();
         this.muxCssRules = createMutex();
