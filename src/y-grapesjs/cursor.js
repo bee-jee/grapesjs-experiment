@@ -14,6 +14,8 @@ const cursorBuilder = () => {
     const cursor = document.createElement('div');
     cursor.style.border = `3px solid ${color}`;
     cursor.style.position = 'absolute';
+    cursor.style.pointerEvents = 'none';
+    cursor.style.background = 'none';
     cursor.classList.add('user-cursor');
     cursor.insertBefore(userDiv, null);
     let timeout = null;

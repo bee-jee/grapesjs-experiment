@@ -70,6 +70,7 @@ export const createTypeFromTextNodes = (components, mapping) => {
 export const createAttributesFromComponent = (component) => {
     const obj = component.toJSON();
     obj.type = component.get('type');
+    obj.id = component.getId();
     delete obj.components;
     delete obj.status;
     if (obj.classes) {
@@ -102,23 +103,42 @@ export const createTypeFromElementNode = (component, mapping) => {
     return type;
 }
 
+export const getYId = (yType) => {
+    return yType.getAttribute('id');
+}
+
+export const createChildrenNodeFromYElement = (el, parent, componentsById, computeYChange) => {
+    el.toArray().forEach((type, index) => {
+        if (type.constructor === Y.XmlElement) {
+            createNodeIfNotExists(type, parent, index, componentsById, computeYChange);
+        } else {
+            createTextNodesFromYText(type, parent, index, componentsById, computeYChange);
+        }
+    });
+}
+
 /**
  * @private
  * @param {Y.XmlElement | Y.XmlHook} el
  * @param {any} parent
- * @param {GrapesjsMapping} mapping
+ * @param {Object} componentsById
  * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
  * @return {any | null}
  */
-export const createNodeIfNotExists = (el, parent, mapping, computeYChange) => {
-    const component = mapping.get(el);
+export const createNodeIfNotExists = (el, parent, index, componentsById, computeYChange) => {
+    const component = componentsById[getYId(el)];
     if (component === undefined) {
         if (el instanceof Y.XmlElement) {
-            return createNodeFromYElement(el, parent, mapping, computeYChange);
+            return createNodeFromYElement(el, parent, index, componentsById, computeYChange);
         } else {
             throw error.methodUnimplemented();
         }
     }
+    console.log(el.constructor.name);
+    if (el instanceof Y.XmlElement) {
+        console.log(el.getAttributes());
+    }
+    createChildrenNodeFromYElement(el, component, componentsById, computeYChange);
     return component;
 }
 
@@ -126,29 +146,22 @@ export const createNodeIfNotExists = (el, parent, mapping, computeYChange) => {
  * @private
  * @param {Y.XmlElement} el
  * @param {any} parent
- * @param {GrapesjsMapping} mapping
+ * @param {Object} componentsById
  * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
  * @return {any | null} Returns node if node could be created. Otherwise it deletes the yjs type and returns null
  */
-export const createNodeFromYElement = (el, parent, mapping, computeYChange) => {
+export const createNodeFromYElement = (el, parent, index, componentsById, computeYChange) => {
     try {
         const attrs = el.getAttributes();
-        const node = parent.get('components').add(attrs);
-        mapping.set(el, node);
-        el.toArray().forEach((type) => {
-            if (type.constructor === Y.XmlElement) {
-                createNodeIfNotExists(type, node, mapping, computeYChange);
-            } else {
-                createTextNodesFromYText(type, node, mapping, computeYChange);
-            }
-        });
+        const component = parent.get('components').add(attrs, { at: index });
+        component.setId(attrs.id);
+        createChildrenNodeFromYElement(el, component, componentsById, computeYChange);
     } catch (e) {
         console.error(e);
         // an error occured while creating the node. This is probably a result of a concurrent action.
         el.doc.transact(transaction => {
             el._item.delete(transaction);
         });
-        mapping.delete(el);
     }
 }
 
@@ -156,18 +169,26 @@ export const createNodeFromYElement = (el, parent, mapping, computeYChange) => {
  * @private
  * @param {Y.XmlText} text
  * @param {any} parent
- * @param {GrapesjsMapping} mapping
+ * @param {Object} componentsById
  * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
  * @return {Array<any>|null}
  */
-export const createTextNodesFromYText = (text, parent, mapping, computeYChange) => {
+export const createTextNodesFromYText = (text, parent, index, componentsById, computeYChange) => {
     const deltas = text.toDelta(undefined, undefined, computeYChange);
     try {
-        deltas.forEach((delta) => {
-            parent.get('components').add({
+        deltas.forEach((delta, index) => {
+            const components = parent.get('components');
+            const textNode = components.at(index);
+            if (textNode) {
+                if (textNode.get('content') === delta.insert) {
+                    return;
+                }
+                components.remove(textNode);
+            }
+            components.add({
                 type: 'textnode',
                 content: delta.insert,
-            });
+            }, { at: index });
         });
     } catch (e) {
         console.error(e);
@@ -588,24 +609,16 @@ export class GrapesjsSync {
         this.doc = doc;
     }
 
-    _docComponentsChanged(events, transaction) {
+    _docComponentsChanged() {
         this.muxDocComponents(() => {
-            /**
-             * @param {any} _
-             * @param {Y.AbstractType} type
-             */
-            const delType = (_, type) => this.docComponentsMapping.delete(type);
-            Y.iterateDeletedStructs(transaction,
-                transaction.deleteSet,
-                struct => struct.constructor === Y.Item && this.docComponentsMapping.delete(struct.content.type));
-            transaction.changed.forEach(delType);
-            transaction.changedParentTypes.forEach(delType);
+            const dc = this.editor.DomComponents;
+            const componentsById = dc.allById();
             this.domComponents.toArray()
-                .forEach(t => createNodeIfNotExists(t, this.wrapper, this.docComponentsMapping));
+                .forEach((t, index) => createNodeIfNotExists(t, this.wrapper, index, componentsById));
         });
     }
 
-    _cssRulesChanged(events, transaction) {
+    _cssRulesChanged() {
         this.muxCssRules(() => {
             const cssComposer = this.editor.CssComposer;
             const sm = this.editor.SelectorManager;
@@ -615,7 +628,8 @@ export class GrapesjsSync {
                 const selectors = rule.selectors.map((selector) => {
                     return sm.add(selector);
                 });
-                const r = cssComposer.add(selectors, rule.state || '', rule.mediaText, rule);
+                const r = cssComposer.add(selectors, rule.state || '', rule.mediaText);
+                r.set('style', rule.style);
             });
         });
     }
