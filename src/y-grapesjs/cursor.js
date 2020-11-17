@@ -1,7 +1,4 @@
-const cursorBuilder = () => {
-    const name = 'Test User';
-    const color = '#ffa500';
-
+const createDefaultCursorBuilder = ({ name = '', color = '' }) => () => {
     const userDiv = document.createElement('div');
     userDiv.style.display = 'none';
     userDiv.style.padding = '3px';
@@ -51,65 +48,83 @@ const getBoundToRoot = (el, root) => {
 }
 
 export class GrapesjsCursor {
-    constructor(awareness, doc, editor) {
+    constructor(awareness, doc, editor, user) {
         this.cursors = new Map();
 
         const dc = editor.DomComponents;
 
-        awareness.on('change', (_, origin) => {
-            if (origin === 'local') {
+        const setSelected = (component) => {
+            if (!component) {
+                awareness.setLocalState({
+                    user,
+                    componentId: null,
+                });
                 return;
             }
-            awareness.getStates().forEach(({ componentId }, clientID) => {
-                if (clientID === doc.clientID) {
-                    return;
-                }
-
-                let cursorInfo = null;
-                const container = editor.getContainer();
-                const frameWrapper = container.querySelector('.gjs-frame-wrapper');
-                if (!this.cursors.has(clientID)) {
-                    cursorInfo = {
-                        dom: cursorBuilder(),
-                    };
-                    this.cursors.set(clientID, cursorInfo);
-                    frameWrapper.append(cursorInfo.dom);
-                } else {
-                    cursorInfo = this.cursors.get(clientID);
-                }
-
-                if (!componentId) {
-                    cursorInfo.dom.style.display = 'none';
-                    return;
-                }
-
-                const component = dc.allById()[componentId];
-                if (!component) {
-                    cursorInfo.dom.style.display = 'none';
-                    return;
-                }
-                const el = component.getEl();
-                const { left, top } = getBoundToRoot(el, frameWrapper);
-
-                cursorInfo.dom.style.display = 'block';
-                cursorInfo.dom.style.left = `${left}px`;
-                cursorInfo.dom.style.top = `${top}px`;
-                cursorInfo.dom.style.width = `${el.clientWidth}px`;
-                cursorInfo.dom.style.height = `${el.clientHeight}px`;
-            });
-        });
-
-        editor.on('component:selected', (component) => {
             const id = component.getId();
             if (id === 'wrapper') {
                 awareness.setLocalState({
+                    user,
                     componentId: null,
                 });
                 return;
             }
             awareness.setLocalState({
+                user,
                 componentId: id,
             });
+        };
+
+        const invalidateCursor = ({ componentId, user }, clientID) => {
+            if (clientID === doc.clientID) {
+                return;
+            }
+            const cursorBuilder = createDefaultCursorBuilder(user);
+
+            let cursorInfo = null;
+            const container = editor.getContainer();
+            const frameWrapper = container.querySelector('.gjs-frame-wrapper');
+            if (!this.cursors.has(clientID)) {
+                cursorInfo = {
+                    dom: cursorBuilder(),
+                };
+                this.cursors.set(clientID, cursorInfo);
+                frameWrapper.append(cursorInfo.dom);
+            } else {
+                cursorInfo = this.cursors.get(clientID);
+            }
+
+            if (!componentId) {
+                cursorInfo.dom.style.display = 'none';
+                return;
+            }
+
+            const component = dc.allById()[componentId];
+            if (!component) {
+                cursorInfo.dom.style.display = 'none';
+                return;
+            }
+            const el = component.getEl();
+            const { left, top } = getBoundToRoot(el, frameWrapper);
+
+            cursorInfo.dom.style.display = 'block';
+            cursorInfo.dom.style.left = `${left}px`;
+            cursorInfo.dom.style.top = `${top}px`;
+            cursorInfo.dom.style.width = `${el.clientWidth}px`;
+            cursorInfo.dom.style.height = `${el.clientHeight}px`;
+        }
+
+        awareness.on('change', (_, origin) => {
+            if (origin === 'local') {
+                return;
+            }
+            awareness.getStates().forEach(invalidateCursor);
         });
+
+        editor.on('update', () => {
+            awareness.getStates().forEach(invalidateCursor);
+        });
+
+        editor.on('component:selected', setSelected);
     }
 }

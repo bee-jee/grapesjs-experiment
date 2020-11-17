@@ -3,7 +3,10 @@ import { createMutex } from 'lib0/mutex';
 import * as error from 'lib0/error';
 import { simpleDiff } from 'lib0/diff';
 import * as Y from 'yjs';
-import { isArray, isEqual, isObject, isString } from 'underscore';
+import isArray from 'underscore/modules/isArray';
+import isEqual from 'underscore/modules/isEqual';
+import isObject from 'underscore/modules/isObject';
+import isString from 'underscore/modules/isString';
 
 /**
  * Either a node if type is YXmlElement or an Array of text nodes if YXmlText
@@ -107,14 +110,16 @@ export const getYId = (yType) => {
     return yType.getAttribute('id');
 }
 
-export const createChildrenNodeFromYElement = (el, parent, componentsById, computeYChange) => {
-    el.toArray().forEach((type, index) => {
+export const createChildrenNodeFromYElement = (el, parent, componentsById, sorter) => {
+    const els = el.toArray();
+    els.forEach((type, index) => {
         if (type.constructor === Y.XmlElement) {
-            createNodeIfNotExists(type, parent, index, componentsById, computeYChange);
+            createNodeIfNotExists(type, parent, index, componentsById, sorter);
         } else {
-            createTextNodesFromYText(type, parent, index, componentsById, computeYChange);
+            createTextNodesFromYText(type, parent, index, componentsById, sorter);
         }
     });
+    removeChildren(els, parent);
 }
 
 /**
@@ -122,23 +127,22 @@ export const createChildrenNodeFromYElement = (el, parent, componentsById, compu
  * @param {Y.XmlElement | Y.XmlHook} el
  * @param {any} parent
  * @param {Object} componentsById
- * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
  * @return {any | null}
  */
-export const createNodeIfNotExists = (el, parent, index, componentsById, computeYChange) => {
+export const createNodeIfNotExists = (el, parent, index, componentsById, sorter) => {
     const component = componentsById[getYId(el)];
     if (component === undefined) {
         if (el instanceof Y.XmlElement) {
-            return createNodeFromYElement(el, parent, index, componentsById, computeYChange);
+            return createNodeFromYElement(el, parent, index, componentsById, sorter);
         } else {
             throw error.methodUnimplemented();
         }
     }
-    console.log(el.constructor.name);
-    if (el instanceof Y.XmlElement) {
-        console.log(el.getAttributes());
-    }
-    createChildrenNodeFromYElement(el, component, componentsById, computeYChange);
+    sorter.move(parent.view.el, component, {
+        index,
+        indexEl: index,
+    });
+    createChildrenNodeFromYElement(el, component, componentsById, sorter);
     return component;
 }
 
@@ -147,15 +151,14 @@ export const createNodeIfNotExists = (el, parent, index, componentsById, compute
  * @param {Y.XmlElement} el
  * @param {any} parent
  * @param {Object} componentsById
- * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
  * @return {any | null} Returns node if node could be created. Otherwise it deletes the yjs type and returns null
  */
-export const createNodeFromYElement = (el, parent, index, componentsById, computeYChange) => {
+export const createNodeFromYElement = (el, parent, index, componentsById, sorter) => {
     try {
         const attrs = el.getAttributes();
         const component = parent.get('components').add(attrs, { at: index });
         component.setId(attrs.id);
-        createChildrenNodeFromYElement(el, component, componentsById, computeYChange);
+        createChildrenNodeFromYElement(el, component, componentsById, sorter);
     } catch (e) {
         console.error(e);
         // an error occured while creating the node. This is probably a result of a concurrent action.
@@ -170,11 +173,10 @@ export const createNodeFromYElement = (el, parent, index, componentsById, comput
  * @param {Y.XmlText} text
  * @param {any} parent
  * @param {Object} componentsById
- * @param {function('removed' | 'added', Y.ID):any} [computeYChange]
  * @return {Array<any>|null}
  */
-export const createTextNodesFromYText = (text, parent, index, componentsById, computeYChange) => {
-    const deltas = text.toDelta(undefined, undefined, computeYChange);
+export const createTextNodesFromYText = (text, parent, index, componentsById, sorter) => {
+    const deltas = text.toDelta(undefined, undefined,);
     try {
         deltas.forEach((delta, index) => {
             const components = parent.get('components');
@@ -583,6 +585,13 @@ export const updateCssRules = (doc, yCssRules, gCssRules) => {
     }
 }
 
+const removeChildren = (els, component) => {
+    const components = component.get('components');
+    for (let i = els.length; i < components.length; i++) {
+        components.remove(components.at(i));
+    }
+}
+
 export class GrapesjsSync {
     constructor(doc, editor) {
         this.muxDocComponents = createMutex();
@@ -603,6 +612,8 @@ export class GrapesjsSync {
         cssRules.observeDeep(this._observeCssRulesFunction);
         editor.on('update', this._grapesjsChanged.bind(this));
 
+        this.sorter = new editor.Utils.Sorter();
+
         /**
          * @type {Y.Doc}
          */
@@ -613,8 +624,10 @@ export class GrapesjsSync {
         this.muxDocComponents(() => {
             const dc = this.editor.DomComponents;
             const componentsById = dc.allById();
-            this.domComponents.toArray()
-                .forEach((t, index) => createNodeIfNotExists(t, this.wrapper, index, componentsById));
+            const els = this.domComponents.toArray();
+            els
+                .forEach((t, index) => createNodeIfNotExists(t, this.wrapper, index, componentsById, this.sorter));
+            removeChildren(els, this.wrapper);
         });
     }
 
@@ -625,9 +638,9 @@ export class GrapesjsSync {
             const rules = this.cssRules.toJSON() || {};
             Object.keys(rules).forEach((key) => {
                 const rule = rules[key];
-                const selectors = rule.selectors.map((selector) => {
+                const selectors = rule.selectors ? rule.selectors.map((selector) => {
                     return sm.add(selector);
-                });
+                }) : [];
                 const r = cssComposer.add(selectors, rule.state || '', rule.mediaText);
                 r.set('style', rule.style);
             });
@@ -642,7 +655,7 @@ export class GrapesjsSync {
         });
         this.muxCssRules(() => {
             this.doc.transact(() => {
-                const cssRules = this.editor.getModel().get('CssComposer').getAll();
+                const cssRules = this.editor.CssComposer.getAll();
                 updateCssRules(this.doc, this.cssRules, cssRules);
             });
         });

@@ -3,10 +3,9 @@ import 'grapesjs-preset-webpage';
 import './css/grapes.min.css';
 import './css/styles.css';
 import * as Y from 'yjs';
-import { GrapesjsSync } from './y-grapesjs/sync';
+import { GrapesjsSync, GrapesjsCursor } from './y-grapesjs';
 import { IndexeddbPersistence } from 'y-indexeddb';
 import { WebsocketProvider } from 'y-websocket';
-import { GrapesjsCursor } from './y-grapesjs/cursor';
 
 const doc = new Y.Doc();
 
@@ -15,7 +14,7 @@ const wsProvider = new WebsocketProvider('ws://localhost:1234', 'web-builder', d
 const persistence = new IndexeddbPersistence('test', doc);
 
 persistence.on('synced', () => {
-    console.log(doc);
+    // console.log(doc);
 });
 
 const editor = grapesjs.init({
@@ -437,10 +436,13 @@ const editor = grapesjs.init({
 
 const sync = new GrapesjsSync(doc, editor);
 
-const cursor = new GrapesjsCursor(wsProvider.awareness, doc, editor);
+const cursor = new GrapesjsCursor(wsProvider.awareness, doc, editor, {
+    name: 'Test User',
+    color: '#00FF00',
+});
 
 doc.on('update', () => {
-    console.log(doc);
+    // console.log(doc);
 });
 
 // function getComponentClasses(component) {
