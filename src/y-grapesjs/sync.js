@@ -79,6 +79,10 @@ export const createAttributesFromComponent = (component) => {
     if (obj.classes) {
         obj.classes = obj.classes.map((cls) => isString(cls) ? cls : cls.get('name'));
     }
+    obj.attributes = {
+        ...obj.attributes,
+        id: obj.id,
+    };
     return obj;
 }
 

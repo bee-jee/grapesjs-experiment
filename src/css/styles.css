@@ -7,3 +7,7 @@ html, body {
     padding: 0;
     box-sizing: border-box;
 }
+
+.gjs-pn-page-p {
+    left: 115px;
+}

@@ -21,6 +21,12 @@ module.exports = merge(common, {
         port: 8000,
     },
 
+    resolve: {
+        alias: {
+            grapesjs: 'grapesjs/dist/grapes.js'
+        }
+    },
+
     plugins: [
         // Only update what has changed on hot reload
         new webpack.HotModuleReplacementPlugin(),
